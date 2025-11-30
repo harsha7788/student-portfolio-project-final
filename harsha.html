@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>ProjectHub - Working Prototype (with Chat & Notifications)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        *{font-family:Inter, sans-serif}
+        .glass-effect{background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.18)}
+        .gradient-bg{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
+        .card-hover{transition:all .3s ease}
+        .card-hover:hover{transform:translateY(-5px);box-shadow:0 20px 40px rgba(0,0,0,.1)}
+        .fade-in{animation:fadeIn .45s ease-in}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        .sidebar-item{transition:all .3s ease}
+        .sidebar-item:hover{background:rgba(102,126,234,.06);border-left:4px solid #667eea}
+        .file-upload-area{border:2px dashed #cbd5e0}
+        .file-upload-area.dragover{border-color:#667eea;background:rgba(102,126,234,.05)}
+        /* Chat specific */
+        .chat-list { max-height: 60vh; overflow-y: auto; }
+        .chat-window { height: 60vh; display:flex; flex-direction:column; }
+        .messages { flex:1; overflow-y:auto; padding:1rem; }
+        .message-in { align-self:flex-start; background:#e5e7eb; padding:.6rem .8rem; border-radius:.6rem; margin-bottom:.5rem; max-width:80%;}
+        .message-out { align-self:flex-end; background:#6366f1; color:white; padding:.6rem .8rem; border-radius:.6rem; margin-bottom:.5rem; max-width:80%;}
+        .notif-dot { width:10px;height:10px;border-radius:50%;background:#ef4444; display:inline-block; }
+        .no-select { user-select:none; -webkit-user-select:none; -ms-user-select:none; }
+    </style>
+</head>
+<body class="bg-gray-50">
+<!-- Authentication Screen -->
+<div id="authScreen" class="min-h-screen gradient-bg flex items-center justify-center p-4">
+    <div class="glass-effect rounded-2xl shadow-2xl w-full max-w-md p-6 fade-in">
+        <div class="text-center mb-6">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full mb-3">
+                <i class="fas fa-graduation-cap text-white text-2xl"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">ProjectHub</h1>
+            <p class="text-gray-600 mt-1 text-sm">Student Portfolio Management — Demo (local-only)</p>
+        </div>
+
+        <div id="loginForm" class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Email</label>
+                <input type="email" id="loginEmail" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="student@example.com">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Password</label>
+                <input type="password" id="loginPassword" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="password">
+            </div>
+            <div class="flex items-center justify-between">
+                <label class="flex items-center text-sm text-gray-600"><input id="rememberMe" type="checkbox" class="mr-2"> Remember me</label>
+                <a href="#" id="forgotLink" class="text-sm text-indigo-600">Forgot?</a>
+            </div>
+            <button onclick="login()" class="w-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white py-2 rounded-lg">Sign In</button>
+            <p class="text-center text-sm text-gray-600">Don't have an account? <a href="#" onclick="showRegisterForm()" class="text-indigo-600">Sign up</a></p>
+        </div>
+
+        <div id="registerForm" class="space-y-3 hidden">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Full Name</label>
+                <input type="text" id="regName" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="John Doe">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Email</label>
+                <input type="email" id="regEmail" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="student@example.com">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Password</label>
+                <input type="password" id="regPassword" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="password">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Role</label>
+                <select id="regRole" class="w-full px-3 py-2 border border-gray-300 rounded-lg"><option value="student">Student</option><option value="admin">Teacher/Admin</option></select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">ID</label>
+                <input type="text" id="regId" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="STU123456">
+            </div>
+            <div class="flex space-x-2">
+                <button onclick="createAccount()" class="flex-1 bg-gradient-to-r from-purple-500 to-indigo-600 text-white py-2 rounded-lg">Create Account</button>
+                <button onclick="showLoginForm()" class="flex-1 border border-gray-300 py-2 rounded-lg">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main App -->
+<div id="mainApp" class="hidden">
+    <header class="bg-white shadow-sm border-b fixed w-full top-0 z-50">
+        <div class="px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-md text-gray-600"><i class="fas fa-bars"></i></button>
+                    <div class="flex items-center ml-3">
+                        <div class="w-10 h-10 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center"><i class="fas fa-graduation-cap text-white"></i></div>
+                        <h1 class="ml-3 text-lg font-bold">ProjectHub</h1>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden md:block">
+                        <input id="globalSearch" type="text" placeholder="Search projects..." class="w-64 px-3 py-2 border rounded-lg">
+                        <i class="fas fa-search absolute right-3 top-2 text-gray-400"></i>
+                    </div>
+
+                    <!-- Notifications -->
+                    <div class="relative">
+                        <button id="notifBtn" onclick="toggleNotifDropdown()" class="relative p-2 text-gray-600">
+                            <i class="fas fa-bell"></i>
+                            <span id="notifDot" class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full hidden"></span>
+                        </button>
+                        <div id="notifDropdown" class="hidden absolute right-0 mt-2 w-80 bg-white shadow-lg rounded-lg overflow-hidden z-50">
+                            <div class="p-3 border-b font-semibold">Notifications <span id="clearNotifs" class="text-sm text-indigo-600 float-right cursor-pointer" onclick="clearNotifications()">Clear</span></div>
+                            <div id="notifList" class="max-h-60 overflow-y-auto"></div>
+                            <div class="p-2 text-center text-xs text-gray-500">Notifications are stored locally</div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-3 cursor-pointer rounded-lg p-2" id="profileBtn" onclick="showSettings()">
+                        <img id="profileAvatar" src="https://picsum.photos/seed/user1/40/40" class="w-10 h-10 rounded-full">
+                        <div class="hidden md:block"><p id="headerUserName" class="text-sm font-semibold">John Doe</p><p id="headerUserRole" class="text-xs text-gray-500">Student</p></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex pt-16">
+        <aside id="sidebar" class="w-64 bg-white shadow-lg h-screen fixed left-0 top-16 transform lg:translate-x-0 -translate-x-full transition-transform z-40">
+            <nav class="p-4 space-y-2">
+                <a href="#" onclick="showDashboard()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-gray-700"><i class="fas fa-home w-5"></i><span>Dashboard</span></a>
+                <a href="#" onclick="showProjects()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-gray-700"><i class="fas fa-project-diagram w-5"></i><span>My Projects</span></a>
+                <a href="#" onclick="showPortfolio()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-gray-700"><i class="fas fa-briefcase w-5"></i><span>Portfolio</span></a>
+                <a href="#" onclick="showMilestones()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-gray-700"><i class="fas fa-flag w-5"></i><span>Milestones</span></a>
+                <a href="#" onclick="showFeedback()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-gray-700"><i class="fas fa-comments w-5"></i><span>Feedback</span></a>
+
+                <!-- CHAT TAB -->
+                <a href="#" onclick="showChat()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-gray-700"><i class="fas fa-message w-5"></i><span>Chat</span></a>
+
+                <div id="adminMenu" class="hidden pt-4 border-t border-gray-200">
+                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Admin</p>
+                    <a href="#" onclick="showReviewProjects()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-gray-700"><i class="fas fa-clipboard-check w-5"></i><span>Review Projects</span></a>
+                    <a href="#" onclick="showStudents()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-gray-700"><i class="fas fa-users w-5"></i><span>Students</span></a>
+                    <a href="#" onclick="showAnalytics()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-gray-700"><i class="fas fa-chart-bar w-5"></i><span>Analytics</span></a>
+                </div>
+
+                <div class="pt-4 border-t border-gray-200">
+                    <a href="#" onclick="showSettings()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-gray-700"><i class="fas fa-cog w-5"></i><span>Settings</span></a>
+                    <a href="#" onclick="logout()" class="sidebar-item flex items-center space-x-3 p-3 rounded-lg text-red-600"><i class="fas fa-sign-out-alt w-5"></i><span>Logout</span></a>
+                </div>
+            </nav>
+        </aside>
+
+        <main class="flex-1 lg:ml-64 p-6">
+            <!-- Dashboard -->
+            <div id="dashboardView" class="fade-in">
+                <div class="mb-4"><h2 class="text-2xl font-bold">Welcome back, <span id="welcomeName">John</span>!</h2><p class="text-sm text-gray-600 mt-1">Overview of your projects and progress</p></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                    <div class="bg-white rounded-xl shadow-sm p-5 card-hover"><div class="flex items-center justify-between mb-3"><div class="w-11 h-11 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-folder text-blue-600"></i></div><span id="pctChangeProjects" class="text-sm text-green-600 font-semibold">+12%</span></div><h3 id="totalProjects" class="text-2xl font-bold">0</h3><p class="text-sm text-gray-600 mt-1">Total Projects</p></div>
+                    <div class="bg-white rounded-xl shadow-sm p-5 card-hover"><div class="flex items-center justify-between mb-3"><div class="w-11 h-11 bg-green-100 rounded-lg flex items-center justify-center"><i class="fas fa-check-circle text-green-600"></i></div><span class="text-sm text-green-600 font-semibold">+5%</span></div><h3 id="completedProjects" class="text-2xl font-bold">0</h3><p class="text-sm text-gray-600 mt-1">Completed</p></div>
+                    <div class="bg-white rounded-xl shadow-sm p-5 card-hover"><div class="flex items-center justify-between mb-3"><div class="w-11 h-11 bg-yellow-100 rounded-lg flex items-center justify-center"><i class="fas fa-clock text-yellow-600"></i></div><span class="text-sm text-yellow-600 font-semibold" id="dueCount">0 due</span></div><h3 id="inProgressProjects" class="text-2xl font-bold">0</h3><p class="text-sm text-gray-600 mt-1">In Progress</p></div>
+                    <div class="bg-white rounded-xl shadow-sm p-5 card-hover"><div class="flex items-center justify-between mb-3"><div class="w-11 h-11 bg-purple-100 rounded-lg flex items-center justify-center"><i class="fas fa-star text-purple-600"></i></div><span class="text-sm text-purple-600 font-semibold">New</span></div><h3 id="avgGrade" class="text-2xl font-bold">0%</h3><p class="text-sm text-gray-600 mt-1">Average Grade</p></div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-xl p-5 shadow-sm">
+                        <h3 class="font-semibold mb-3">Recent Projects</h3>
+                        <div id="recentProjectsList" class="space-y-3"></div>
+                    </div>
+                    <div class="bg-white rounded-xl p-5 shadow-sm">
+                        <h3 class="font-semibold mb-3">Recent Activity</h3>
+                        <div id="recentActivityList" class="space-y-3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Projects view -->
+            <div id="projectsView" class="hidden fade-in">
+                <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">My Projects</h2><button onclick="showNewProjectModal()" class="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-2 rounded-lg"><i class="fas fa-plus mr-2"></i>New Project</button></div>
+                <div class="bg-white rounded-lg shadow-sm mb-4 p-3"><div class="flex border-b"><button onclick="filterProjects('all')" class="px-4 py-2 tab-active">All</button><button onclick="filterProjects('active')" class="px-4 py-2">Active</button><button onclick="filterProjects('completed')" class="px-4 py-2">Completed</button><button onclick="filterProjects('archived')" class="px-4 py-2">Archived</button></div></div>
+                <div id="projectsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            </div>
+
+            <!-- Portfolio -->
+            <div id="portfolioView" class="hidden fade-in">
+                <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">My Portfolio</h2><button onclick="showPortfolioSettings()" class="text-indigo-600"><i class="fas fa-cog mr-2"></i>Settings</button></div>
+                <div class="bg-white rounded-xl p-6 shadow-sm">
+                    <div class="text-center mb-6"><img id="portfolioAvatar" src="https://picsum.photos/seed/portfolio/120/120" class="w-32 h-32 rounded-full mx-auto mb-3"><h3 id="portfolioName" class="text-2xl font-bold">John Doe</h3><p id="portfolioTitle" class="text-gray-600">Computer Science Student</p><p id="portfolioBio" class="text-gray-500 mt-2">Bio</p></div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"><div class="text-center"><h4 id="portfolioProjects" class="text-3xl font-bold text-indigo-600">0</h4><p class="text-gray-600">Projects</p></div><div class="text-center"><h4 id="portfolioSkills" class="text-3xl font-bold text-green-600">0</h4><p class="text-gray-600">Skills</p></div><div class="text-center"><h4 id="portfolioViews" class="text-3xl font-bold text-purple-600">0</h4><p class="text-gray-600">Profile Views</p></div></div>
+                    <div><h4 class="font-semibold mb-3">Featured Projects</h4><div id="portfolioProjectsList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div></div>
+                </div>
+            </div>
+
+            <!-- Chat view (NEW) -->
+            <div id="chatView" class="hidden fade-in">
+                <div class="mb-4 flex justify-between items-center">
+                    <h2 class="text-2xl font-bold">Messages</h2>
+                    <div class="text-sm text-gray-500">Chat with faculty & students — stored locally</div>
+                </div>
+
+                <div class="bg-white rounded-xl p-4 shadow-sm grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <!-- Participants -->
+                    <div class="col-span-1 border-r pr-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="font-semibold">Conversations</div>
+                            <button class="text-sm text-indigo-600" onclick="composeNewChat()">New</button>
+                        </div>
+                        <div id="chatUsers" class="chat-list space-y-2">
+                            <!-- populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Messages -->
+                    <div class="col-span-2 flex flex-col">
+                        <div id="chatHeader" class="border-b pb-3 mb-3">
+                            <div id="chatWithName" class="font-semibold">Select a conversation</div>
+                        </div>
+                        <div class="chat-window bg-gray-50 rounded p-3">
+                            <div id="messages" class="messages"></div>
+
+                            <div class="mt-3 flex items-center">
+                                <input id="chatInput" type="text" class="flex-1 px-3 py-2 border rounded-lg" placeholder="Type a message...">
+                                <button onclick="sendMessage()" class="ml-2 bg-indigo-600 text-white px-4 py-2 rounded-lg">Send</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Milestones -->
+            <div id="milestonesView" class="hidden fade-in"><div class="mb-4"><h2 class="text-2xl font-bold">Project Milestones</h2><p class="text-sm text-gray-600 mt-1">Track progress</p></div><div class="bg-white rounded-xl p-5 shadow-sm"><div id="milestonesList" class="space-y-3"></div></div></div>
+
+            <!-- Feedback -->
+            <div id="feedbackView" class="hidden fade-in">
+                <div class="mb-4 flex justify-between items-center">
+                    <h2 class="text-2xl font-bold">Feedback & Reviews</h2>
+                    <button onclick="openFeedbackModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">
+                        <i class="fas fa-plus mr-2"></i>Add Feedback
+                    </button>
+                </div>
+                <div id="feedbackList" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
+            </div>
+
+            <!-- Review Projects (admin) -->
+            <div id="reviewProjectsView" class="hidden fade-in"><div class="mb-4"><h2 class="text-2xl font-bold">Review Student Projects</h2></div><div id="reviewProjectsList" class="space-y-3"></div></div>
+
+            <!-- Students -->
+            <div id="studentsView" class="hidden fade-in"><div class="mb-4"><h2 class="text-2xl font-bold">Students</h2></div><div class="bg-white rounded-xl overflow-hidden shadow-sm"><div class="overflow-x-auto"><table class="w-full"><thead class="bg-gray-50"><tr><th class="p-3 text-left text-xs font-medium text-gray-500">Student</th><th class="p-3 text-left text-xs font-medium text-gray-500">ID</th><th class="p-3 text-left text-xs font-medium text-gray-500">Projects</th><th class="p-3 text-left text-xs font-medium text-gray-500">Avg Grade</th><th class="p-3 text-left text-xs font-medium text-gray-500">Status</th></tr></thead><tbody id="studentsTableBody" class="bg-white"></tbody></table></div></div></div>
+
+            <!-- Analytics -->
+            <div id="analyticsView" class="hidden fade-in"><div class="mb-4"><h2 class="text-2xl font-bold">Analytics</h2></div><div class="grid grid-cols-1 lg:grid-cols-2 gap-4"><div class="bg-white p-4 rounded-xl shadow-sm"><h3 class="font-semibold mb-3">Project Submissions Trend</h3><canvas id="submissionsChart"></canvas></div><div class="bg-white p-4 rounded-xl shadow-sm"><h3 class="font-semibold mb-3">Grade Distribution</h3><canvas id="gradesChart"></canvas></div></div></div>
+
+            <!-- Settings -->
+            <div id="settingsView" class="hidden fade-in"><div class="mb-4"><h2 class="text-2xl font-bold">Settings</h2></div><div class="bg-white rounded-xl shadow-sm p-4"><div class="p-2 border-b"><h3 class="font-semibold">Profile Information</h3></div><div class="p-4 space-y-3"><div><label class="block text-sm">Full Name</label><input id="settingsName" class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm">Email</label><input id="settingsEmail" class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm">Bio</label><textarea id="settingsBio" rows="3" class="w-full px-3 py-2 border rounded-lg"></textarea></div><div class="flex space-x-2"><button onclick="saveSettings()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Save</button><button onclick="showDashboard()" class="px-4 py-2 border rounded-lg">Back</button></div></div></div></div>
+        </main>
+    </div>
+</div>
+
+<!-- New Project Modal -->
+<div id="newProjectModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="p-4 border-b"><h3 class="text-xl font-bold">Create New Project</h3></div>
+        <div class="p-4 space-y-3">
+            <div><label class="block text-sm">Project Title</label><input id="projectTitle" class="w-full px-3 py-2 border rounded-lg"></div>
+            <div><label class="block text-sm">Description</label><textarea id="projectDescription" rows="3" class="w-full px-3 py-2 border rounded-lg"></textarea></div>
+            <div class="grid grid-cols-2 gap-3"><div><label class="block text-sm">Category</label><select id="projectCategory" class="w-full px-3 py-2 border rounded-lg"><option>Web Development</option><option>Mobile App</option><option>Data Science</option><option>Machine Learning</option><option>UI/UX</option></select></div><div><label class="block text-sm">Due Date</label><input id="projectDueDate" type="date" class="w-full px-3 py-2 border rounded-lg"></div></div>
+            <div><label class="block text-sm">Upload Files</label><div id="fileArea" class="file-upload-area p-4 rounded-lg text-center cursor-pointer" onclick="document.getElementById('projectFiles').click()"><i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i><p class="text-gray-600">Drop files here or click to upload</p><p class="text-sm text-gray-500 mt-1">PDF, DOC, Images (Max 10MB)</p><input id="projectFiles" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"></div><div id="filesList" class="text-sm text-gray-600 mt-2"></div></div>
+            <div><label class="block text-sm">Milestones</label><div id="milestonesContainer" class="space-y-2"><div class="flex space-x-2"><input class="flex-1 px-3 py-2 border rounded-lg milestoneInput" placeholder="Milestone 1"><button onclick="addMilestone(event)" class="px-3 py-2 bg-green-600 text-white rounded-lg"><i class="fas fa-plus"></i></button></div></div></div>
+        </div>
+        <div class="p-4 border-t flex justify-end space-x-2"><button onclick="closeNewProjectModal()" class="px-4 py-2 border rounded-lg">Cancel</button><button onclick="createProject()" class="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg">Create Project</button></div>
+    </div>
+</div>
+
+<!-- Feedback Modal -->
+<div id="feedbackModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl w-full max-w-lg p-4">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="font-semibold">Provide Feedback</h3>
+            <button onclick="closeFeedbackModal()" class="text-gray-600">Close</button>
+        </div>
+        <div>
+            <label class="block text-sm">Comments</label>
+            <textarea id="feedbackText" rows="4" class="w-full px-3 py-2 border rounded-lg"></textarea>
+            <div class="flex justify-end mt-3">
+                <button onclick="submitFeedback()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Send</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* -------------------------
+   Utility / LocalStorage helpers
+   ------------------------- */
+const $ = id => document.getElementById(id);
+const uid = () => 'id_' + Math.random().toString(36).slice(2,9);
+
+function loadOrDefault(key, def){
+    try{
+        const v = localStorage.getItem(key);
+        return v ? JSON.parse(v) : def;
+    } catch(e) { return def; }
+}
+function save(key, data){
+    localStorage.setItem(key, JSON.stringify(data));
+}
+
+/* -------------------------
+   Initialize demo data
+   ------------------------- */
+(function initData(){
+    if(!localStorage.getItem('ph_users')){
+        const users = [
+            {id: uid(), name:'John Doe', email:'student@example.com', password:'password', role:'student', sid:'STU001'},
+            {id: uid(), name:'Ms. Smith', email:'teacher@example.com', password:'password', role:'admin', sid:'TCH001'},
+            {id: uid(), name:'Ravi Kumar', email:'ravi@example.com', password:'password', role:'student', sid:'STU002'}
+        ];
+        save('ph_users', users);
+    }
+    if(!localStorage.getItem('ph_projects')){
+        save('ph_projects', [
+            { id: uid(), title:'AI Chatbot', desc:'NLP chatbot', category:'AI', due:'', milestones:['Design','Implementation'], files:[], ownerId: loadOrDefault('ph_users',[])[0]?.id || '', status:'active', createdAt:new Date().toISOString() }
+        ]);
+    }
+    if(!localStorage.getItem('ph_feedback')){
+        save('ph_feedback', []);
+    }
+    if(!localStorage.getItem('ph_chats')){
+        save('ph_chats', []); // messages array
+    }
+    if(!localStorage.getItem('ph_notifs')){
+        save('ph_notifs', []); // notifications array
+    }
+})();
+
+/* -------------------------
+   Auth
+   ------------------------- */
+function showRegisterForm(){ $('loginForm').classList.add('hidden'); $('registerForm').classList.remove('hidden'); }
+function showLoginForm(){ $('registerForm').classList.add('hidden'); $('loginForm').classList.remove('hidden'); }
+
+function createAccount(){
+    const name = $('regName').value.trim();
+    const email = $('regEmail').value.trim().toLowerCase();
+    const pwd = $('regPassword').value;
+    const role = $('regRole').value;
+    const sid = $('regId').value.trim();
+    if(!name || !email || !pwd){ alert('Please fill required fields'); return; }
+    let users = loadOrDefault('ph_users', []);
+    if(users.find(u=>u.email === email)){ alert('Account already exists with this email'); return; }
+    const newUser = { id: uid(), name, email, password: pwd, role, sid };
+    users.push(newUser);
+    save('ph_users', users);
+    alert('Account created — sign in');
+    showLoginForm();
+}
+
+function login(){
+    const email = $('loginEmail').value.trim().toLowerCase();
+    const pwd = $('loginPassword').value;
+    const remember = $('rememberMe').checked;
+    if(!email || !pwd){ alert('Enter email and password'); return; }
+    const users = loadOrDefault('ph_users', []);
+    const user = users.find(u => u.email === email && u.password === pwd);
+    if(!user){ alert('Invalid credentials'); return; }
+    save('ph_currentUser', user);
+    if(remember) localStorage.setItem('ph_remember', email); else localStorage.removeItem('ph_remember');
+    startApp();
+}
+
+function logout(){
+    localStorage.removeItem('ph_currentUser');
+    location.reload();
+}
+
+/* -------------------------
+   App start / Views
+   ------------------------- */
+function startApp(){
+    const currentUser = loadOrDefault('ph_currentUser', null);
+    if(!currentUser) return;
+    $('authScreen').classList.add('hidden');
+    $('mainApp').classList.remove('hidden');
+
+    $('headerUserName').innerText = currentUser.name;
+    $('headerUserRole').innerText = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+    $('welcomeName').innerText = currentUser.name.split(' ')[0];
+
+    if(currentUser.role === 'admin') $('adminMenu').classList.remove('hidden'); else $('adminMenu').classList.add('hidden');
+
+    renderAll();
+    renderNotifDot();
+    renderChatUsers();
+}
+
+function hideAllViews(){
+    const ids = ['dashboardView','projectsView','portfolioView','milestonesView','feedbackView','reviewProjectsView','studentsView','analyticsView','settingsView','chatView'];
+    ids.forEach(i => $(i).classList.add('hidden'));
+}
+
+function showDashboard(){ hideAllViews(); $('dashboardView').classList.remove('hidden'); renderDashboard(); }
+function showProjects(){ hideAllViews(); $('projectsView').classList.remove('hidden'); renderProjects(); }
+function showPortfolio(){ hideAllViews(); $('portfolioView').classList.remove('hidden'); renderPortfolio(); }
+function showMilestones(){ hideAllViews(); $('milestonesView').classList.remove('hidden'); renderMilestones(); }
+function showFeedback(){ hideAllViews(); $('feedbackView').classList.remove('hidden'); renderFeedback(); }
+function showReviewProjects(){ hideAllViews(); $('reviewProjectsView').classList.remove('hidden'); renderReviewProjects(); }
+function showStudents(){ hideAllViews(); $('studentsView').classList.remove('hidden'); renderStudents(); }
+function showAnalytics(){ hideAllViews(); $('analyticsView').classList.remove('hidden'); renderAnalytics(); }
+function showSettings(){ hideAllViews(); $('settingsView').classList.remove('hidden'); populateSettings(); }
+function toggleSidebar(){ const sb = $('sidebar'); if(sb.classList.contains('-translate-x-full')) sb.classList.remove('-translate-x-full'); else sb.classList.add('-translate-x-full'); }
+
+/* -------------------------
+   Projects CRUD (unchanged)
+   ------------------------- */
+function showNewProjectModal(){ $('newProjectModal').classList.remove('hidden'); $('newProjectModal').classList.add('flex'); }
+function closeNewProjectModal(){ $('newProjectModal').classList.add('hidden'); $('newProjectModal').classList.remove('flex'); clearProjectForm(); }
+function addMilestone(e){ if(e) e.preventDefault(); const container = $('milestonesContainer'); const div = document.createElement('div'); div.className='flex space-x-2'; div.innerHTML = '<input class="flex-1 px-3 py-2 border rounded-lg milestoneInput" placeholder="New milestone"><button onclick="removeMilestone(event)" class="px-3 py-2 bg-red-500 text-white rounded-lg"><i class="fas fa-trash"></i></button>'; container.appendChild(div); }
+function removeMilestone(e){ e.preventDefault(); e.target.closest('div').remove(); }
+function clearProjectForm(){ $('projectTitle').value=''; $('projectDescription').value=''; $('projectDueDate').value=''; $('projectCategory').selectedIndex=0; $('filesList').innerHTML=''; const inputs = document.querySelectorAll('.milestoneInput'); inputs.forEach((el,i)=>{ if(i>0) el.closest('div').remove(); else el.value='Milestone 1'; }); }
+
+$('projectFiles').addEventListener('change', function(){
+    const list = Array.from(this.files).map(f => `${f.name} (${Math.round(f.size/1024)} KB)`);
+    $('filesList').innerText = list.join('\n');
+});
+
+function createProject(){
+    const title = $('projectTitle').value.trim();
+    const desc = $('projectDescription').value.trim();
+    const category = $('projectCategory').value;
+    const due = $('projectDueDate').value;
+    if(!title){ alert('Please enter project title'); return; }
+    const milestones = Array.from(document.querySelectorAll('.milestoneInput')).map(i=>i.value.trim()).filter(Boolean);
+    const files = Array.from($('projectFiles').files).map(f=>({name:f.name,size:f.size}));
+    const projects = loadOrDefault('ph_projects', []);
+    const currentUser = loadOrDefault('ph_currentUser', null);
+    const p = {
+        id: uid(),
+        title,
+        desc,
+        category,
+        due,
+        milestones,
+        files,
+        ownerId: currentUser.id,
+        status:'active',
+        createdAt: new Date().toISOString()
+    };
+    projects.unshift(p);
+    save('ph_projects', projects);
+    closeNewProjectModal();
+    renderAll();
+    showProjects();
+    addNotification({type:'project', text:`${currentUser.name} created project "${title}"`, meta:{projectId:p.id}});
+}
+
+/* -------------------------
+   Renderers (dashboard, projects, etc.)
+   ------------------------- */
+function renderProjects(filter='all'){
+    const grid = $('projectsGrid');
+    grid.innerHTML = '';
+    const projects = loadOrDefault('ph_projects', []);
+    const currentUser = loadOrDefault('ph_currentUser', null);
+    const mine = projects.filter(p => p.ownerId === currentUser.id);
+    const list = (filter==='all') ? mine : mine.filter(p => (filter==='active'?p.status==='active': filter==='completed'?p.status==='completed':p.status==='archived'));
+    if(list.length === 0){
+        grid.innerHTML = '<div class="col-span-3 bg-white p-4 rounded-lg text-gray-600">No projects yet</div>';
+        return;
+    }
+    list.forEach(p=>{
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-xl p-4 shadow-sm';
+        card.innerHTML = `<div class="flex justify-between items-start"><div><h4 class="font-semibold">${escapeHtml(p.title)}</h4><p class="text-xs text-gray-500">${p.category} • ${p.due?('Due '+p.due):'No due date'}</p></div><div><button onclick="openProject('${p.id}')" class="px-2 py-1 border rounded text-sm">Open</button></div></div><p class="text-sm text-gray-600 mt-2">${escapeHtml(p.desc || '')}</p><div class="mt-3 flex items-center justify-between text-xs text-gray-500"><div>${p.files.length} files</div><div>${p.milestones.length} milestones</div></div>`;
+        grid.appendChild(card);
+    });
+}
+
+function openProject(id){
+    const projects = loadOrDefault('ph_projects', []);
+    const p = projects.find(x=>x.id===id);
+    if(!p) return alert('Project not found');
+    const details = `Title: ${p.title}\nCategory: ${p.category}\nDue: ${p.due || '—'}\nMilestones:\n${p.milestones.map((m,i)=> (i+1)+'. '+m).join('\n')}`;
+    alert(details);
+}
+
+function filterProjects(mode){ renderProjects(mode); }
+
+function renderDashboard(){
+    const projects = loadOrDefault('ph_projects', []);
+    const currentUser = loadOrDefault('ph_currentUser', null);
+    const mine = projects.filter(p=>p.ownerId===currentUser.id);
+    $('totalProjects').innerText = mine.length;
+    $('inProgressProjects').innerText = mine.filter(p=>p.status==='active').length;
+    $('completedProjects').innerText = mine.filter(p=>p.status==='completed').length;
+    $('avgGrade').innerText = computeAvgGrade(mine) + '%';
+    $('dueCount').innerText = mine.filter(p=>{
+        if(!p.due) return false;
+        const d = new Date(p.due); const now = new Date(); const diff=(d-now)/(1000*60*60*24); return diff>=0 && diff<=7;
+    }).length + ' due';
+
+    const recent = mine.slice(0,5);
+    const rp = $('recentProjectsList');
+    rp.innerHTML = '';
+    recent.forEach(p=>{
+        const div = document.createElement('div');
+        div.className = 'p-3 border rounded';
+        div.innerHTML = `<div class="flex justify-between"><div><b>${escapeHtml(p.title)}</b><div class="text-xs text-gray-500">${p.category} • ${p.due||'No due'}</div></div><div class="text-xs text-gray-400">${new Date(p.createdAt).toLocaleDateString()}</div></div>`;
+        rp.appendChild(div);
+    });
+
+    const acts = loadOrDefault('ph_feedback', []).slice(0,5);
+    const ra = $('recentActivityList');
+    ra.innerHTML = '';
+    acts.forEach(a=>{
+        const div = document.createElement('div');
+        div.className = 'p-3 border rounded';
+        div.innerHTML = `<div class="text-sm">${escapeHtml(a.text)}</div><div class="text-xs text-gray-400 mt-1">${new Date(a.createdAt).toLocaleString()}</div>`;
+        ra.appendChild(div);
+    });
+}
+
+function computeAvgGrade(list){
+    if(!list.length) return 0;
+    const grades = list.map((p,i)=> Math.floor(70 + (i%5)*5));
+    const avg = Math.round(grades.reduce((a,b)=>a+b,0)/grades.length);
+    return avg;
+}
+
+function renderPortfolio(){
+    const currentUser = loadOrDefault('ph_currentUser', null);
+    const projects = loadOrDefault('ph_projects', []).filter(p=>p.ownerId===currentUser.id);
+    $('portfolioName').innerText = currentUser.name;
+    $('portfolioTitle').innerText = currentUser.role==='admin'?'Teacher':'Student';
+    $('portfolioBio').innerText = localStorage.getItem('ph_bio') || 'Passionate about creating solutions.';
+    $('portfolioProjects').innerText = projects.length;
+    $('portfolioProjectsList').innerHTML = '';
+    projects.slice(0,6).forEach(p=>{
+        const card = document.createElement('div');
+        card.className = 'p-3 border rounded';
+        card.innerHTML = `<b>${escapeHtml(p.title)}</b><div class="text-xs text-gray-500">${p.category}</div>`;
+        $('portfolioProjectsList').appendChild(card);
+    });
+}
+
+function showPortfolioSettings(){ alert('Portfolio settings - coming soon!'); }
+
+function renderMilestones(){
+    const projects = loadOrDefault('ph_projects', []);
+    const currentUser = loadOrDefault('ph_currentUser', null);
+    const mine = projects.filter(p=>p.ownerId===currentUser.id);
+    const list = $('milestonesList');
+    list.innerHTML = '';
+    mine.forEach(p=>{
+        const div = document.createElement('div');
+        div.className = 'p-3 border rounded';
+        div.innerHTML = `<div class="flex justify-between"><div><b>${escapeHtml(p.title)}</b><div class="text-xs text-gray-500">${p.milestones.length} milestones</div></div><div class="text-xs text-gray-400">${p.due||'No due'}</div></div><div class="mt-2 text-sm">${p.milestones.map((m,i)=>'<div>'+ (m ? escapeHtml(m) : '—') +'</div>').join('')}</div>`;
+        list.appendChild(div);
+    });
+}
+
+/* -------------------------
+   Feedback
+   ------------------------- */
+function renderFeedback(){
+    const list = $('feedbackList'); list.innerHTML = '';
+    const fb = loadOrDefault('ph_feedback', []);
+    if(fb.length === 0){ list.innerHTML = '<div class="col-span-2 bg-white p-4 rounded-lg text-gray-600">No feedback yet</div>'; return; }
+    fb.forEach(f=>{
+        const card = document.createElement('div');
+        card.className = 'p-3 border rounded bg-white';
+        card.innerHTML = `<b>${escapeHtml(f.userName||'Anonymous')}</b><div class="text-xs text-gray-500">${new Date(f.createdAt).toLocaleString()}</div><p class="mt-2 text-sm">${escapeHtml(f.text)}</p>`;
+        list.appendChild(card);
+    });
+}
+
+function renderReviewProjects(){
+    const list = $('reviewProjectsList'); list.innerHTML = '';
+    const projects = loadOrDefault('ph_projects', []);
+    projects.filter(p=>p.status==='pending' || true).slice(0,10).forEach(p=>{
+        const div = document.createElement('div');
+        div.className = 'p-3 border rounded bg-white';
+        div.innerHTML = `<div class="flex justify-between"><div><b>${escapeHtml(p.title)}</b><div class="text-xs text-gray-500">${p.category}</div></div><div><button onclick="markReviewed('${p.id}')" class="px-3 py-1 bg-green-600 text-white rounded">Review</button></div></div>`;
+        list.appendChild(div);
+    });
+}
+
+function markReviewed(id){
+    const projects = loadOrDefault('ph_projects', []);
+    const p = projects.find(x=>x.id===id); if(!p) return;
+    p.status = 'reviewed';
+    save('ph_projects', projects);
+    addNotification({type:'project-review', text:`Project "${p.title}" marked reviewed.`});
+    alert('Marked reviewed');
+    renderReviewProjects();
+}
+
+function renderStudents(){
+    const tbody = $('studentsTableBody'); tbody.innerHTML = '';
+    const users = loadOrDefault('ph_users', []);
+    users.forEach(u=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="p-3">${escapeHtml(u.name)}</td><td class="p-3">${escapeHtml(u.sid||'—')}</td><td class="p-3">${loadOrDefault('ph_projects',[]).filter(p=>p.ownerId===u.id).length}</td><td class="p-3">${Math.floor(Math.random()*20)+70}%</td><td class="p-3">Active</td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderAnalytics(){
+    const labels = ['Week -4','Week -3','Week -2','Week -1','This week'];
+    const data = labels.map((l,i)=> Math.floor(Math.random()*10)+i*2);
+    const ctx = document.getElementById('submissionsChart');
+    if(ctx) new Chart(ctx, { type:'line', data:{ labels, datasets:[{ label:'Submissions', data, fill:true, tension:0.3 }] } });
+    const gctx = document.getElementById('gradesChart');
+    if(gctx) new Chart(gctx, { type:'bar', data:{ labels:['A','B','C','D'], datasets:[{ label:'Students', data:[12,19,7,3] }] } });
+}
+
+function populateSettings(){
+    const user = loadOrDefault('ph_currentUser', null);
+    $('settingsName').value = user.name;
+    $('settingsEmail').value = user.email;
+    $('settingsBio').value = localStorage.getItem('ph_bio') || '';
+}
+
+function saveSettings(){
+    const user = loadOrDefault('ph_currentUser', null);
+    const users = loadOrDefault('ph_users', []);
+    const u = users.find(x=>x.id===user.id);
+    u.name = $('settingsName').value;
+    u.email = $('settingsEmail').value;
+    save('ph_users', users);
+    localStorage.setItem('ph_bio', $('settingsBio').value);
+    save('ph_currentUser', u);
+    alert('Saved');
+    startApp();
+}
+
+/* -------------------------
+   Feedback modal
+   ------------------------- */
+function openFeedbackModal(){ $('feedbackModal').classList.remove('hidden'); $('feedbackModal').classList.add('flex'); }
+function closeFeedbackModal(){ $('feedbackModal').classList.add('hidden'); $('feedbackModal').classList.remove('flex'); }
+function submitFeedback(){
+    const txt = $('feedbackText').value.trim();
+    if(!txt) return alert('Enter feedback');
+    const user = loadOrDefault('ph_currentUser', null);
+    const fb = loadOrDefault('ph_feedback', []);
+    fb.unshift({ id: uid(), text: txt, userId: user.id, userName: user.name, createdAt: new Date().toISOString() });
+    save('ph_feedback', fb);
+    $('feedbackText').value = '';
+    closeFeedbackModal();
+    renderFeedback();
+    addNotification({type:'feedback', text:`${user.name} sent feedback.`});
+}
+
+/* -------------------------
+   Notifications system
+   ------------------------- */
+function addNotification(obj){
+    // obj: { type, text, meta? }
+    const notif = {
+        id: uid(),
+        type: obj.type || 'info',
+        text: obj.text || '',
+        meta: obj.meta || null,
+        createdAt: new Date().toISOString(),
+        unread: true
+    };
+    const arr = loadOrDefault('ph_notifs', []);
+    arr.unshift(notif);
+    save('ph_notifs', arr);
+    renderNotifDot();
+    // update dropdown if open
+    renderNotifDropdown();
+}
+
+function renderNotifDot(){
+    const currentUser = loadOrDefault('ph_currentUser', null);
+    if(!currentUser) return;
+    const arr = loadOrDefault('ph_notifs', []);
+    const unread = arr.filter(n => n.unread).length;
+    if(unread > 0) $('notifDot').classList.remove('hidden'); else $('notifDot').classList.add('hidden');
+}
+
+function toggleNotifDropdown(){
+    const dd = $('notifDropdown');
+    if(dd.classList.contains('hidden')) { renderNotifDropdown(); dd.classList.remove('hidden'); } else dd.classList.add('hidden');
+}
+
+function renderNotifDropdown(){
+    const list = $('notifList'); list.innerHTML = '';
+    const arr = loadOrDefault('ph_notifs', []);
+    if(arr.length === 0){
+        list.innerHTML = '<div class="p-3 text-sm text-gray-500">No notifications</div>';
+        return;
+    }
+    arr.forEach(n=>{
+        const item = document.createElement('div');
+        item.className = 'p-3 border-b flex justify-between items-start';
+        item.innerHTML = `<div><div class="text-sm font-medium">${escapeHtml(n.text)}</div><div class="text-xs text-gray-400 mt-1">${new Date(n.createdAt).toLocaleString()}</div></div><div class="text-sm">${n.unread ? '<span class="notif-dot"></span>' : ''}</div>`;
+        item.onclick = () => { markNotifRead(n.id); if(n.meta && n.meta.projectId) openProject(n.meta.projectId); };
+        list.appendChild(item);
+    });
+}
+
+function markNotifRead(id){
+    const arr = loadOrDefault('ph_notifs', []);
+    const idx = arr.findIndex(x=>x.id===id); if(idx>-1){ arr[idx].unread = false; save('ph_notifs', arr); renderNotifDot(); renderNotifDropdown(); }
+}
+
+function clearNotifications(){
+    save('ph_notifs', []);
+    renderNotifDot();
+    renderNotifDropdown();
+}
+
+/* -------------------------
+   Chat system (conversations)
+   ------------------------- */
+let activeChatWith = null; // userId of recipient
+
+function showChat(){
+    hideAllViews();
+    $('chatView').classList.remove('hidden');
+    renderChatUsers();
+    renderMessagesPane();
+}
+
+function renderChatUsers(){
+    const container = $('chatUsers');
+    container.innerHTML = '';
+    const users = loadOrDefault('ph_users', []);
+    const currentUser = loadOrDefault('ph_currentUser', null);
+    if(!currentUser) return;
+    // conversation partners: other users
+    users.filter(u => u.id !== currentUser.id).forEach(u=>{
+        // count unread messages from that user
+        const chats = loadOrDefault('ph_chats', []);
+        const unreadCount = chats.filter(m => m.fromId === u.id && m.toId === currentUser.id && !m.read).length;
+        const div = document.createElement('div');
+        div.className = 'p-3 rounded hover:bg-gray-100 cursor-pointer flex items-center justify-between';
+        div.innerHTML = `<div><div class="font-medium">${escapeHtml(u.name)}</div><div class="text-xs text-gray-500">${escapeHtml(u.role)}</div></div><div class="text-sm">${unreadCount>0? '<span class="bg-red-500 text-white text-xs px-2 py-1 rounded-full">'+unreadCount+'</span>':''}</div>`;
+        div.onclick = () => { openChatWith(u.id); };
+        container.appendChild(div);
+    });
+}
+
+function composeNewChat(){
+    // open first available other user as a quick compose
+    const users = loadOrDefault('ph_users', []);
+    const current = loadOrDefault('ph_currentUser', null);
+    if(!current) return;
+    const other = users.find(u => u.id !== current.id);
+    if(!other) return alert('No other users to message yet');
+    openChatWith(other.id);
+}
+
+function openChatWith(userId){
+    activeChatWith = userId;
+    const user = loadOrDefault('ph_users', []).find(u => u.id === userId);
+    $('chatWithName').innerText = user ? user.name : 'Conversation';
+    renderMessagesPane();
+}
+
+function renderMessagesPane(){
+    const messagesContainer = $('messages');
+    messagesContainer.innerHTML = '';
+    if(!activeChatWith){ messagesContainer.innerHTML = '<div class="text-gray-500">Select a conversation</div>'; return; }
+    const chats = loadOrDefault('ph_chats', []);
+    const currentUser = loadOrDefault('ph_currentUser', null);
+    const convo = chats.filter(m => (m.fromId === currentUser.id && m.toId === activeChatWith) || (m.fromId === activeChatWith && m.toId === currentUser.id));
+    // sort by ts ascending
+    convo.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+    convo.forEach(m=>{
+        const div = document.createElement('div');
+        div.className = m.fromId === currentUser.id ? 'message-out' : 'message-in';
+        div.innerHTML = `<div class="text-sm">${escapeHtml(m.text)}</div><div class="text-xs text-gray-300 mt-1">${new Date(m.ts).toLocaleString()}</div>`;
+        messagesContainer.appendChild(div);
+    });
+    // mark incoming messages as read
+    markMessagesReadFrom(activeChatWith);
+    // scroll to bottom
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function sendMessage(){
+    const txtInput = $('chatInput');
+    const text = txtInput.value.trim();
+    if(!text) return;
+    const currentUser = loadOrDefault('ph_currentUser', null);
+    if(!currentUser || !activeChatWith) return alert('Select a conversation first');
+    const chats = loadOrDefault('ph_chats', []);
+    const m = { id: uid(), fromId: currentUser.id, toId: activeChatWith, text, ts: new Date().toISOString(), read: false };
+    chats.push(m);
+    save('ph_chats', chats);
+    txtInput.value = '';
+    renderMessagesPane();
+    renderChatUsers();
+    // add notification for recipient
+    const other = loadOrDefault('ph_users', []).find(u => u.id === activeChatWith);
+    addNotification({type:'message', text:`New message from ${currentUser.name}`, meta:{fromId: currentUser.id, toId: activeChatWith}});
+    // optional: if recipient is 'admin' auto reply after 1s (simulate)
+    const recipient = other;
+    if(recipient && recipient.role === 'admin'){
+        setTimeout(()=> {
+            const reply = { id: uid(), fromId: recipient.id, toId: currentUser.id, text: `Hi ${currentUser.name}, thanks — I'll check and reply soon.`, ts: new Date().toISOString(), read: false };
+            const ch = loadOrDefault('ph_chats', []);
+            ch.push(reply);
+            save('ph_chats', ch);
+            addNotification({type:'message', text: `Reply from ${recipient.name}`, meta:{fromId: recipient.id, toId: currentUser.id}});
+            renderChatUsers();
+            // if active chat still open, update
+            if(activeChatWith === recipient.id) renderMessagesPane();
+        }, 900);
+    }
+}
+
+/* mark messages from a user as read by currentUser */
+function markMessagesReadFrom(otherId){
+    const current = loadOrDefault('ph_currentUser', null);
+    if(!current) return;
+    let chats = loadOrDefault('ph_chats', []);
+    let changed = false;
+    chats.forEach(c => {
+        if(c.fromId === otherId && c.toId === current.id && !c.read){ c.read = true; changed = true; }
+    });
+    if(changed) save('ph_chats', chats);
+    renderChatUsers();
+}
+
+/* -------------------------
+   Helper + startup
+   ------------------------- */
+function escapeHtml(s){
+    if(!s) return '';
+    return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
+
+function renderAll(){
+    renderDashboard();
+    renderProjects();
+    renderPortfolio();
+    renderMilestones();
+    renderFeedback();
+    renderReviewProjects();
+    renderStudents();
+    renderAnalytics();
+}
+
+/* If remember email present */
+window.addEventListener('load', ()=>{
+    const remembered = localStorage.getItem('ph_remember');
+    if(remembered){ $('loginEmail').value = remembered; $('rememberMe').checked = true; }
+    const cur = loadOrDefault('ph_currentUser', null);
+    if(cur) startApp();
+
+    // close notif dropdown if click outside
+    document.addEventListener('click', (e)=>{
+        const dd = $('notifDropdown');
+        const btn = $('notifBtn');
+        if(dd && !dd.contains(e.target) && btn && !btn.contains(e.target)){
+            dd.classList.add('hidden');
+        }
+    });
+
+    // wire global search simple behaviour
+    const gs = $('globalSearch');
+    if(gs) gs.addEventListener('input', function(){ if(this.value.length>0) showProjects(); });
+});
+
+/* small helper to open chat with a user by email (used by admin quick-links, optional) */
+function openChatByEmail(email){
+    const users = loadOrDefault('ph_users', []);
+    const u = users.find(x=>x.email===email);
+    if(!u) return alert('User not found');
+    openChatWith(u.id);
+}
+
+/* small UI action to render notifications count initially */
+function renderNotifDropdownOnOpen(){
+    renderNotifDropdown();
+}
+
+/* Expose some functions to console for testing (optional) */
+window._ph = {
+    addNotification,
+    sendMessage,
+    openChatWith,
+    openChatByEmail,
+    getChats: ()=>loadOrDefault('ph_chats',[]),
+    getNotifs: ()=>loadOrDefault('ph_notifs',[])
+};
+</script>
+</body>
+</html>
